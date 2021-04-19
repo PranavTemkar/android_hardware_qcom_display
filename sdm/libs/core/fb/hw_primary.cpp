@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015 - 2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2015 - 2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -652,7 +652,7 @@ DisplayError HWPrimary::SetPPFeatures(PPFeaturesConfig *feature_list) {
   return kErrorNone;
 }
 
-DisplayError HWPrimary::SetMixerAttributes(const HWMixerAttributes &mixer_attributes) {
+DisplayError HWPrimary::SetMixerAttributes(HWMixerAttributes &mixer_attributes) {
   if (IsResolutionSwitchEnabled()) {
     return kErrorNotSupported;
   }
@@ -731,6 +731,20 @@ DisplayError HWPrimary::GetDynamicDSIClock(uint64_t *bitclk) {
   Sys::close_(fd);
   return kErrorNone;
 }
+
+DisplayError HWPrimary::SetActiveConfig(uint32_t active_config) {
+  active_config_index_ = active_config;
+  return kErrorNone;
+}
+
+DisplayError HWPrimary::ClearConfigs() {
+  return kErrorNone;
+}
+
+DisplayError HWPrimary::GetHdmiMode(std::vector<uint32_t> &hdmi_modes) {
+  return kErrorNone;
+}
+
 
 }  // namespace sdm
 

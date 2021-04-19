@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -63,6 +63,7 @@ class HWDevice : public HWInterface {
 
   // From HWInterface
   virtual DisplayError GetActiveConfig(uint32_t *active_config);
+  virtual DisplayError ClearConfigs();
   virtual DisplayError GetNumDisplayAttributes(uint32_t *count);
   virtual DisplayError GetDisplayAttributes(uint32_t index,
                                             HWDisplayAttributes *display_attributes);
@@ -70,6 +71,7 @@ class HWDevice : public HWInterface {
   virtual DisplayError SetDisplayAttributes(uint32_t index);
   virtual DisplayError SetDisplayAttributes(const HWDisplayAttributes &display_attributes);
   virtual DisplayError GetConfigIndex(uint32_t mode, uint32_t *index);
+  virtual DisplayError GetConfigIndex(uint32_t width, uint32_t height, uint32_t *index);
   virtual DisplayError PowerOn();
   virtual DisplayError PowerOff();
   virtual DisplayError Doze();
@@ -77,7 +79,7 @@ class HWDevice : public HWInterface {
   virtual DisplayError Standby();
   virtual DisplayError Validate(HWLayers *hw_layers);
   virtual DisplayError Commit(HWLayers *hw_layers);
-  virtual DisplayError Flush();
+  virtual DisplayError Flush(bool secure);
   virtual DisplayError GetPPFeaturesVersion(PPFeatureVersion *vers);
   virtual DisplayError SetPPFeatures(PPFeaturesConfig *feature_list);
   virtual DisplayError SetVSyncState(bool enable);
@@ -94,10 +96,11 @@ class HWDevice : public HWInterface {
   virtual DisplayError SetAutoRefresh(bool enable) { return kErrorNone; }
   virtual DisplayError SetS3DMode(HWS3DMode s3d_mode);
   virtual DisplayError SetScaleLutConfig(HWScaleLutInfo *lut_info);
-  virtual DisplayError SetMixerAttributes(const HWMixerAttributes &mixer_attributes);
+  virtual DisplayError SetMixerAttributes(HWMixerAttributes &mixer_attributes);
   virtual DisplayError GetMixerAttributes(HWMixerAttributes *mixer_attributes);
   virtual DisplayError SetDynamicDSIClock(uint64_t bitclk);
   virtual DisplayError GetDynamicDSIClock(uint64_t *bitclk);
+  virtual DisplayError SetConfigAttributes(uint32_t index, uint32_t width, uint32_t height);
 
   enum {
     kHWEventVSync,

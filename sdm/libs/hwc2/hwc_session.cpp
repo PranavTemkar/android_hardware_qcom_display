@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -196,7 +196,11 @@ int HWCSession::Init() {
     // Create display if it is connected, else wait for hotplug connect event.
     if (hw_disp_info.is_connected) {
       status = CreateExternalDisplay(HWC_DISPLAY_PRIMARY);
+    } else {
+      CreateNullDisplay();
+      null_display_active_ = true;
     }
+    hwc_display_[HWC_DISPLAY_PRIMARY]->SetIsPrimaryPanel(true);
   } else {
     // Create and power on primary display
     status = HWCDisplayPrimary::Create(core_intf_, &buffer_allocator_, &callbacks_, qservice_,
@@ -214,6 +218,7 @@ int HWCSession::Init() {
     return status;
   }
 
+  is_composer_up_ = true;
   return 0;
 }
 
@@ -580,6 +585,7 @@ int32_t HWCSession::RegisterCallback(hwc2_device_t *device, int32_t descriptor,
     }
   }
   hwc_session->need_invalidate_ = false;
+  hwc_session->callback_reg_ = true;
   return INT32(error);
 }
 
@@ -1094,12 +1100,28 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
       status = GetSupportedDsiClk(input_parcel, output_parcel);
       break;
 
+    case qService::IQService::GET_COMPOSER_STATUS:
+      output_parcel->writeInt32(getComposerStatus());
+      break;
+
+    case qService::IQService::SET_STAND_BY_MODE:
+      status = SetStandByMode(input_parcel);
+      break;
+
+    case qService::IQService::GET_PANEL_RESOLUTION:
+      status = GetPanelResolution(input_parcel, output_parcel);
+      break;
+
     default:
       DLOGW("QService command = %d is not supported", command);
       return -EINVAL;
   }
 
   return status;
+}
+
+android::status_t HWCSession::getComposerStatus() {
+  return is_composer_up_;
 }
 
 android::status_t HWCSession::HandleGetDisplayAttributesForConfig(const android::Parcel
@@ -1231,7 +1253,7 @@ void HWCSession::SetFrameDumpConfig(const android::Parcel *input_parcel) {
 android::status_t HWCSession::SetDsiClk(const android::Parcel *input_parcel) {
   int disp_id = input_parcel->readInt32();
   uint64_t clk = UINT32(input_parcel->readInt64());
-  if (disp_id < 0 || !hwc_display_[disp_id]) {
+  if (disp_id != HWC_DISPLAY_PRIMARY || !hwc_display_[disp_id]) {
     return -EINVAL;
   }
 
@@ -1241,7 +1263,7 @@ android::status_t HWCSession::SetDsiClk(const android::Parcel *input_parcel) {
 android::status_t HWCSession::GetDsiClk(const android::Parcel *input_parcel,
                                         android::Parcel *output_parcel) {
   int disp_id = input_parcel->readInt32();
-  if (disp_id < 0 || !hwc_display_[disp_id]) {
+  if (disp_id != HWC_DISPLAY_PRIMARY || !hwc_display_[disp_id]) {
     return -EINVAL;
   }
 
@@ -1254,7 +1276,7 @@ android::status_t HWCSession::GetDsiClk(const android::Parcel *input_parcel,
 android::status_t HWCSession::GetSupportedDsiClk(const android::Parcel *input_parcel,
                                                  android::Parcel *output_parcel) {
   int disp_id = input_parcel->readInt32();
-  if (disp_id < 0 || !hwc_display_[disp_id]) {
+  if (disp_id != HWC_DISPLAY_PRIMARY || !hwc_display_[disp_id]) {
     return -EINVAL;
   }
 
@@ -1539,6 +1561,14 @@ void HWCSession::ResetPanel() {
 int HWCSession::HotPlugHandler(bool connected) {
   int status = 0;
   bool notify_hotplug = false;
+  if (!first_commit_ && !connected && hdmi_is_primary_ && !null_display_active_) {
+    SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
+    DLOGI("Disconnect event before first commit");
+    HWCDisplayExternal::Destroy(hwc_display_[HWC_DISPLAY_PRIMARY]);
+    CreateNullDisplay();
+    null_display_active_ = true;
+    return 0;
+  }
 
   // To prevent sending events to client while a lock is held, acquire scope locks only within
   // below scope so that those get automatically unlocked after the scope ends.
@@ -1549,13 +1579,15 @@ int HWCSession::HotPlugHandler(bool connected) {
     // If HDMI is not primary, create/destroy external display normally.
     if (hdmi_is_primary_) {
       SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
-      if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
+      if (!null_display_active_) {
         status = hwc_display_[HWC_DISPLAY_PRIMARY]->SetState(connected);
       } else {
-        status = CreateExternalDisplay(HWC_DISPLAY_PRIMARY);
-        notify_hotplug = true;
+        // This cannot be avoided due to SurfaceFlinger design
+        // limitation in Android P.
+        HWCDisplayExternal::Destroy(hwc_display_[HWC_DISPLAY_PRIMARY]);
+        DLOGE("External display is connected. Abort!!");
+        abort();
       }
-
       break;
     }
 
@@ -1668,6 +1700,39 @@ android::status_t HWCSession::GetVisibleDisplayRect(const android::Parcel *input
   return android::NO_ERROR;
 }
 
+android::status_t HWCSession::SetStandByMode(const android::Parcel *input_parcel) {
+  SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
+
+  bool enable = (input_parcel->readInt32() > 0);
+
+  if (!hwc_display_[HWC_DISPLAY_PRIMARY]) {
+    DLOGI("Primary display is not initialized");
+    return -EINVAL;
+  }
+
+  hwc_display_[HWC_DISPLAY_PRIMARY]->SetStandByMode(enable);
+
+  return android::NO_ERROR;
+}
+
+android::status_t HWCSession::GetPanelResolution(const android::Parcel *input_parcel,
+                                                 android::Parcel *output_parcel) {
+  SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
+
+  if (!hwc_display_[HWC_DISPLAY_PRIMARY]) {
+    DLOGI("Primary display is not initialized");
+    return -EINVAL;
+  }
+  auto panel_width = 0u;
+  auto panel_height = 0u;
+
+  hwc_display_[HWC_DISPLAY_PRIMARY]->GetPanelResolution(&panel_width, &panel_height);
+  output_parcel->writeInt32(INT32(panel_width));
+  output_parcel->writeInt32(INT32(panel_height));
+
+  return android::NO_ERROR;
+}
+
 void HWCSession::Refresh(hwc2_display_t display) {
   SCOPE_LOCK(callbacks_lock_);
    callbacks_.Refresh(display);
@@ -1711,5 +1776,13 @@ Return<int32_t> HWCSession::setDisplayAnimating(uint64_t display_id, bool animat
                              &HWCDisplay::SetDisplayAnimating, animating);
 }
 #endif
+
+void HWCSession::CreateNullDisplay() {
+  auto hwc_display = &hwc_display_[HWC_DISPLAY_PRIMARY];
+
+  HWCDisplayDummy::Create(core_intf_, &buffer_allocator_, &callbacks_, qservice_,
+                          hwc_display);
+}
+
 
 }  // namespace sdm

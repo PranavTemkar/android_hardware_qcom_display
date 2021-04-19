@@ -217,7 +217,8 @@ HWC2::Error HWCDisplayPrimary::Validate(uint32_t *out_num_types, uint32_t *out_n
     // Avoid flush for Command mode panel.
     DisplayConfigFixedInfo display_config;
     display_intf_->GetConfig(&display_config);
-    flush_ = !display_config.is_cmdmode;
+    flush_ = !(display_config.is_cmdmode && secure_display_active_);
+    validated_ = true;
     return status;
   }
 
@@ -231,7 +232,7 @@ HWC2::Error HWCDisplayPrimary::Present(int32_t *out_retire_fence) {
     // TODO(user): From old HWC implementation
     // If we do not handle the frame set retireFenceFd to outbufAcquireFenceFd
     // Revisit this when validating display_paused
-    DisplayError error = display_intf_->Flush();
+    DisplayError error = display_intf_->Flush(false);
     if (error != kErrorNone) {
       DLOGE("Flush failed. Error = %d", error);
     }
@@ -394,6 +395,7 @@ void HWCDisplayPrimary::SetSecureDisplay(bool secure_display_active) {
     DisplayConfigFixedInfo display_config;
     display_intf_->GetConfig(&display_config);
     skip_prepare_ = !display_config.is_cmdmode;
+    secure_display_transition_ = true;
   }
 }
 
@@ -531,6 +533,7 @@ void HWCDisplayPrimary::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_lay
     return;
   }
 
+  SetLayerBuffer(output_buffer_info_, &output_buffer_);
   output_buffer_base_ = buffer;
   post_processed_output_ = true;
   DisablePartialUpdateOneFrame();
@@ -631,6 +634,30 @@ DisplayError HWCDisplayPrimary::GetDynamicDSIClock(uint64_t *bitclk) {
   }
 
   return kErrorNotSupported;
+}
+
+DisplayError HWCDisplayPrimary::SetStandByMode(bool enable) {
+  if (enable) {
+    if (!display_null_.IsActive()) {
+      stored_display_intf_ = display_intf_;
+      display_intf_ = &display_null_;
+      display_null_.SetActive(true);
+      DLOGD("Null display is connected successfully");
+    } else {
+      DLOGD("Null display is already connected.");
+    }
+  } else {
+    if (display_null_.IsActive()) {
+      display_intf_ = stored_display_intf_;
+      validated_.reset();
+      display_null_.SetActive(false);
+      DLOGD("Display is connected successfully");
+    } else {
+      DLOGD("Display is already connected.");
+    }
+  }
+
+  return kErrorNone;
 }
 
 }  // namespace sdm

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2017, 2018 The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -169,6 +169,7 @@ struct DisplayConfigVariableInfo {
   uint32_t fps = 0;               //!< Frame rate per second.
   uint32_t vsync_period_ns = 0;   //!< VSync period in nanoseconds.
   bool is_yuv = false;            //!< If the display output is in YUV format.
+  uint32_t pixel_formats = 0;
 };
 
 /*! @brief Event data associated with VSync event.
@@ -322,12 +323,14 @@ class DisplayInterface {
     respective fences currently in use. This operation may result in a blank display on the panel
     until a new frame is submitted for composition.
 
+    @param[in] secure \link secure \endlink
+
     @return \link DisplayError \endlink
 
     @sa Prepare
     @sa Commit
   */
-  virtual DisplayError Flush() = 0;
+  virtual DisplayError Flush(bool secure) = 0;
 
   /*! @brief Method to get current state of the display device.
 

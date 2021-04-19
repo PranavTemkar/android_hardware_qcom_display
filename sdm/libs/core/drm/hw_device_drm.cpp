@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017 - 2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017 - 2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -785,7 +785,7 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   return kErrorNone;
 }
 
-DisplayError HWDeviceDRM::Flush() {
+DisplayError HWDeviceDRM::Flush(bool secure) {
   return kErrorNone;
 }
 
@@ -973,7 +973,7 @@ DisplayError HWDeviceDRM::SetScaleLutConfig(HWScaleLutInfo *lut_info) {
   return kErrorNone;
 }
 
-DisplayError HWDeviceDRM::SetMixerAttributes(const HWMixerAttributes &mixer_attributes) {
+DisplayError HWDeviceDRM::SetMixerAttributes(HWMixerAttributes &mixer_attributes) {
   if (!hw_resource_.hw_dest_scalar_info.count) {
     return kErrorNotSupported;
   }
@@ -1059,6 +1059,28 @@ DisplayError HWDeviceDRM::SetDynamicDSIClock(uint64_t bitclk) {
 
 DisplayError HWDeviceDRM::GetDynamicDSIClock(uint64_t *bitclk) {
   return kErrorNotSupported;
+}
+
+
+DisplayError HWDeviceDRM::SetActiveConfig(uint32_t active_config) {
+  return kErrorNone;
+}
+
+DisplayError HWDeviceDRM::GetConfigIndex(uint32_t width, uint32_t height, uint32_t *index) {
+  return kErrorNone;
+}
+
+
+DisplayError HWDeviceDRM::SetConfigAttributes(uint32_t index, uint32_t width, uint32_t height) {
+  return kErrorNone;
+}
+
+DisplayError HWDeviceDRM::ClearConfigs() {
+  return kErrorNone;
+}
+
+DisplayError HWDeviceDRM::GetHdmiMode(std::vector<uint32_t> &hdmi_modes) {
+  return kErrorNone;
 }
 
 }  // namespace sdm
